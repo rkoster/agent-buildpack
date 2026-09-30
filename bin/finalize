@@ -15,6 +15,10 @@ if [[ ! -x "${dependency_dir}/opensandbox-capi" ]]; then
   echo "OpenSandbox CAPI app facade missing from ${dependency_dir}" >&2
   exit 1
 fi
+if [[ ! -x "${dependency_dir}/opencode-database-setup" ]]; then
+  echo "OpenCode database setup helper missing from ${dependency_dir}" >&2
+  exit 1
+fi
 
 mkdir -p "${build_dir}/bin" "${build_dir}/.profile.d"
 cat > "${build_dir}/bin/xdg-open" <<'BROWSER_SHIM'
@@ -60,6 +64,10 @@ export BROWSER="\${HOME}/bin/xdg-open"
 if [[ -z "\${OPENCODE_SERVER_PASSWORD:-}" ]]; then
   echo "OPENCODE_SERVER_PASSWORD must be set; refusing to start an unauthenticated OpenCode web server" >&2
   exit 1
+fi
+database_url="\$("\${DEPS_DIR}/${index}/opencode-agent/opencode-database-setup")"
+if [[ -n "\${database_url}" ]]; then
+  export OPENCODE_DATABASE_URL="\${database_url}"
 fi
 if [[ "\${OPEN_SANDBOX_API_ENABLED:-false}" == "true" ]]; then
   "\${DEPS_DIR}/${index}/opencode-agent/opensandbox-capi" &

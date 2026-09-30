@@ -17,12 +17,14 @@ fi
 mkdir -p "${tmp}/deps/0/opencode-agent"
 touch "${tmp}/deps/0/opencode-agent/opencode"
 touch "${tmp}/deps/0/opencode-agent/opensandbox-capi"
-chmod +x "${tmp}/deps/0/opencode-agent/opencode" "${tmp}/deps/0/opencode-agent/opensandbox-capi"
+touch "${tmp}/deps/0/opencode-agent/opencode-database-setup"
+chmod +x "${tmp}/deps/0/opencode-agent/opencode" "${tmp}/deps/0/opencode-agent/opensandbox-capi" "${tmp}/deps/0/opencode-agent/opencode-database-setup"
 "${root}/bin/finalize" "${tmp}/build" "${tmp}/cache" "${tmp}/deps" 0
 
 grep -q 'OPENCODE_SERVER_PASSWORD must be set' "${tmp}/build/bin/start-opencode"
 grep -q 'OPENCODE_SERVER_PASSWORD must be set' "${tmp}/build/bin/start-agent"
 grep -q 'OPEN_SANDBOX_API_ENABLED' "${tmp}/build/bin/start-agent"
+grep -q 'opencode-database-setup' "${tmp}/build/bin/start-agent"
 grep -q 'sandbox_create' "${root}/opencode/plugins/opensandbox.js"
 grep -q 'sandbox_list' "${root}/opencode/plugins/opensandbox.js"
 grep -q 'sandbox_command' "${root}/opencode/plugins/opensandbox.js"

@@ -7,6 +7,7 @@ include_files:
 - bin/release
 - bin/xdg-open
 - bin/opensandbox-capi
+- bin/opencode-database-setup
 - dependencies.lock
 - opencode/plugins/opensandbox.js
 - scripts/test-opencode-plugin.mjs

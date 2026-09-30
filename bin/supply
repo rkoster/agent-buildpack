@@ -61,4 +61,9 @@ if [[ ! -x "${packaged_runtime}" ]]; then
   exit 1
 fi
 install -m 0755 "${packaged_runtime}" "${runtime_binary}"
+if [[ ! -x "${script_dir}/opencode-database-setup" ]]; then
+  echo "Packaged OpenCode database setup helper is missing; run scripts/package.sh before cf push" >&2
+  exit 1
+fi
+install -m 0755 "${script_dir}/opencode-database-setup" "${dependency_dir}/opencode-database-setup"
 echo "Installed OpenCode ${OPENCODE_VERSION} into ${dependency_dir}"

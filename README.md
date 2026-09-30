@@ -13,6 +13,14 @@ The buildpack also injects an OpenCode plugin with explicit remote sandbox tools
 It does not claim full OpenSandbox compatibility or transparent workspace
 synchronization.
 
+When exactly one PostgreSQL service is bound, startup selects its `uri` from
+`VCAP_SERVICES`, initializes the schema, and adds the pinned
+[`opencode-database-plugin@1.0.12`](https://github.com/aemr3/opencode-database-plugin/tree/53fea738e256fdeed4d42c76b09484680b1fbc47)
+to OpenCode's generated config. The URL is passed through
+`OPENCODE_DATABASE_URL` to the OpenCode process and is not written into the
+generated config. No PostgreSQL binding means no database plugin. This plugin
+logs sessions and tool events; OpenCode's native session store remains local.
+
 ## Requirements
 
 - Linux x86-64 on the `cflinuxfs4` stack (the binary-only buildpack reports
@@ -92,6 +100,24 @@ and `sandbox_delete`. `sandbox_list` shows owned sandboxes and pagination, so
 the agent can reuse an existing sandbox ID. It uses the
 localhost facade and its endpoint proxy; execd receives
 `X-EXECD-ACCESS-TOKEN` when `EXECD_ACCESS_TOKEN` is configured.
+
+### PostgreSQL event logging
+
+Bind a PostgreSQL service that advertises the `postgresql` label or tag and
+provides a `credentials.uri` PostgreSQL URL. Startup applies the upstream plugin
+schema before enabling the plugin; it stops if a selected binding is incomplete,
+the database cannot be reached, or more than one PostgreSQL binding matches.
+For this lab's internal DNS, the setup helper resolves the bound host to its
+current Silk IP for the plugin process on each agent start; restarting the agent
+is required if the database app is recreated with a different IP. The URL and
+credentials remain in process memory/environment, not in the OpenCode config.
+The schema is copied from upstream revision
+`53fea738e256fdeed4d42c76b09484680b1fbc47` in
+`runtime/database-setup/schema.sql`. The helper and plugin version are pinned;
+the OpenCode runtime fetches the npm plugin on first start. The cf-esb demo's
+`PostgreSQL` / `ephemeral` plan returns an internal URL and grants an app-to-app
+network policy on bind. That database app is ephemeral, so its data is not
+guaranteed across database-app replacement.
 
 At app startup, the static Go facade reads the `dgx-spark-model` user-provided
 service binding and merges its selected model/provider into the droplet's
