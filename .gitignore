@@ -1,0 +1,5 @@
+/build/
+/bin/opensandbox-capi
+/bin/opencode-database-setup
+__pycache__/
+*.pyc

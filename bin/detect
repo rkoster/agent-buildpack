@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+build_dir=${1:?usage: detect BUILD_DIR}
+
+if [[ -f "${build_dir}/AGENTS.md" ]]; then
+  echo "OpenCode agent (AGENTS.md detected)"
+  exit 0
+fi
+
+exit 1

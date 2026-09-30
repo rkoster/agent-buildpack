@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+build_dir=${1:?usage: finalize BUILD_DIR CACHE_DIR DEPS_DIR INDEX}
+deps_dir=${3:?usage: finalize BUILD_DIR CACHE_DIR DEPS_DIR INDEX}
+index=${4:?usage: finalize BUILD_DIR CACHE_DIR DEPS_DIR INDEX}
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+dependency_dir="${deps_dir}/${index}/opencode-agent"
+if [[ ! -x "${dependency_dir}/opencode" ]]; then
+  echo "OpenCode dependency missing from ${dependency_dir}" >&2
+  exit 1
+fi
+if [[ ! -x "${dependency_dir}/opensandbox-capi" ]]; then
+  echo "OpenSandbox CAPI app facade missing from ${dependency_dir}" >&2
+  exit 1
+fi
+
+mkdir -p "${build_dir}/bin" "${build_dir}/.profile.d"
+cat > "${build_dir}/bin/xdg-open" <<'BROWSER_SHIM'
+#!/usr/bin/env bash
+# OpenCode is running headlessly; CF exposes the web interface through its route.
+exit 0
+BROWSER_SHIM
+chmod 0755 "${build_dir}/bin/xdg-open"
+cat > "${build_dir}/bin/start-opencode" <<STARTUP
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -z "\${OPENCODE_SERVER_PASSWORD:-}" ]]; then
+  echo "OPENCODE_SERVER_PASSWORD must be set; refusing to start an unauthenticated OpenCode web server" >&2
+  exit 1
+fi
+export BROWSER=\"\${HOME}/bin/xdg-open\"
+
+port=\${PORT:-8080}
+if [[ ! "\${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+  echo "PORT must be a valid TCP port" >&2
+  exit 1
+fi
+
+export OPENCODE_DISABLE_AUTOUPDATE=true
+export PATH="\${HOME}/bin:\${PATH}"
+exec "\${DEPS_DIR}/${index}/opencode-agent/opencode" web --hostname 0.0.0.0 --port "\${port}"
+STARTUP
+chmod 0755 "${build_dir}/bin/start-opencode"
+
+cat > "${build_dir}/bin/start-opensandbox-capi" <<STARTUP
+#!/usr/bin/env bash
+set -euo pipefail
+exec "\${DEPS_DIR}/${index}/opencode-agent/opensandbox-capi"
+STARTUP
+chmod 0755 "${build_dir}/bin/start-opensandbox-capi"
+
+cat > "${build_dir}/bin/start-agent" <<STARTUP
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH="\${HOME}/bin:\${PATH}"
+export BROWSER="\${HOME}/bin/xdg-open"
+if [[ -z "\${OPENCODE_SERVER_PASSWORD:-}" ]]; then
+  echo "OPENCODE_SERVER_PASSWORD must be set; refusing to start an unauthenticated OpenCode web server" >&2
+  exit 1
+fi
+if [[ "\${OPEN_SANDBOX_API_ENABLED:-false}" == "true" ]]; then
+  "\${DEPS_DIR}/${index}/opencode-agent/opensandbox-capi" &
+  facade_pid=\$!
+  facade_ready=false
+  cleanup_facade() {
+    kill "\${facade_pid}" 2>/dev/null || true
+    wait "\${facade_pid}" 2>/dev/null || true
+  }
+  trap cleanup_facade TERM INT
+  for attempt in {1..50}; do
+    if ! kill -0 "\${facade_pid}" 2>/dev/null; then
+      wait "\${facade_pid}"
+      exit \$?
+    fi
+    if curl --fail --silent "http://\${OPEN_SANDBOX_LISTEN:-127.0.0.1:18080}/health" >/dev/null; then
+      facade_ready=true
+      break
+    fi
+    sleep 0.1
+  done
+  if ! kill -0 "\${facade_pid}" 2>/dev/null; then
+    wait "\${facade_pid}"
+    exit \$?
+  fi
+  if [[ "\${facade_ready}" != "true" ]]; then
+    echo "OpenSandbox facade did not become ready" >&2
+    exit 1
+  fi
+fi
+"\${DEPS_DIR}/${index}/opencode-agent/opencode" web --hostname 0.0.0.0 --port "\${PORT:-8080}" &
+opencode_pid=\$!
+cleanup() {
+  kill "\${opencode_pid}" 2>/dev/null || true
+  wait "\${opencode_pid}" 2>/dev/null || true
+  if [[ -n "\${facade_pid:-}" ]]; then
+    cleanup_facade
+  fi
+}
+trap cleanup TERM INT EXIT
+while kill -0 "\${opencode_pid}" 2>/dev/null; do
+  if [[ -n "\${facade_pid:-}" ]] && ! kill -0 "\${facade_pid}" 2>/dev/null; then
+    echo "OpenSandbox facade exited while OpenCode was running" >&2
+    exit 1
+  fi
+  sleep 1
+done
+wait "\${opencode_pid}"
+STARTUP
+chmod 0755 "${build_dir}/bin/start-agent"
+
+plugin_dir="${build_dir}/.opencode/plugins"
+mkdir -p "${plugin_dir}"
+install -m 0644 "${script_dir}/../opencode/plugins/opensandbox.js" "${plugin_dir}/opensandbox.js"
+config_path="${build_dir}/.opencode/opencode.json"
+cat > "${config_path}" <<'CONFIG'
+{
+  "tools": {
+    "bash": false,
+    "read": false,
+    "write": false,
+    "edit": false,
+    "patch": false,
+    "glob": false,
+    "grep": false,
+    "ls": false,
+    "list": false
+  }
+}
+CONFIG
+
+cat > "${build_dir}/.profile.d/opencode-agent.sh" <<'PROFILE'
+export OPENCODE_DISABLE_AUTOUPDATE=true
+PROFILE
+
+cat > "${build_dir}/release.yml" <<'RELEASE'
+---
+default_process_types:
+  web: ./bin/start-agent
+RELEASE
+
+echo "Configured OpenCode web process"

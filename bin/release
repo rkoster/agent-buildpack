@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+build_dir=${1:?usage: release BUILD_DIR}
+release_file="${build_dir}/release.yml"
+
+if [[ ! -f "${release_file}" ]]; then
+  echo "Buildpack release metadata missing: ${release_file}" >&2
+  exit 1
+fi
+
+cat "${release_file}"

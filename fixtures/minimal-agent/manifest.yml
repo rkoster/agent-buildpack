@@ -1,0 +1,10 @@
+---
+applications:
+- name: opencode-agent-smoke
+  buildpacks:
+  - agent-buildpack
+  memory: 1G
+  disk_quota: 2G
+  no-route: true
+  env:
+    OPEN_SANDBOX_API_ENABLED: "true"

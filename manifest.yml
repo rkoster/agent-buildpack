@@ -1,0 +1,14 @@
+---
+language: opencode-agent
+include_files:
+- bin/detect
+- bin/supply
+- bin/finalize
+- bin/release
+- bin/xdg-open
+- bin/opensandbox-capi
+- dependencies.lock
+- opencode/plugins/opensandbox.js
+- scripts/test-opencode-plugin.mjs
+stacks:
+- cflinuxfs4

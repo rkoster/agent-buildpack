@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+build_dir=${1:?usage: supply BUILD_DIR CACHE_DIR DEPS_DIR INDEX}
+cache_dir=${2:?usage: supply BUILD_DIR CACHE_DIR DEPS_DIR INDEX}
+deps_dir=${3:?usage: supply BUILD_DIR CACHE_DIR DEPS_DIR INDEX}
+index=${4:?usage: supply BUILD_DIR CACHE_DIR DEPS_DIR INDEX}
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../dependencies.lock
+source "${script_dir}/../dependencies.lock"
+
+if [[ ! -f "${build_dir}/AGENTS.md" ]]; then
+  echo "AGENTS.md is required to install the OpenCode agent runtime" >&2
+  exit 1
+fi
+
+command -v curl >/dev/null || { echo "curl is required during staging" >&2; exit 1; }
+command -v sha256sum >/dev/null || { echo "sha256sum is required during staging" >&2; exit 1; }
+command -v tar >/dev/null || { echo "tar is required during staging" >&2; exit 1; }
+
+dependency_dir="${deps_dir}/${index}/opencode-agent"
+buildpack_config="${deps_dir}/${index}/config.yml"
+download_dir="${cache_dir}/opencode-agent"
+archive="${download_dir}/opencode-${OPENCODE_VERSION}-linux-x64.tar.gz"
+unpack_dir="${download_dir}/unpacked"
+
+mkdir -p "${download_dir}" "${dependency_dir}" "${unpack_dir}"
+printf '%s\n' '---' > "${buildpack_config}"
+
+if [[ ! -f "${archive}" ]] || [[ "$(sha256sum "${archive}" | cut -d ' ' -f 1)" != "${OPENCODE_SHA256}" ]]; then
+  rm -f "${archive}"
+  echo "Downloading OpenCode ${OPENCODE_VERSION}"
+  curl --fail --location --retry 3 --silent --show-error "${OPENCODE_URL}" --output "${archive}"
+fi
+
+actual_sha=$(sha256sum "${archive}" | cut -d ' ' -f 1)
+if [[ "${actual_sha}" != "${OPENCODE_SHA256}" ]]; then
+  rm -f "${archive}"
+  echo "OpenCode archive checksum mismatch: expected ${OPENCODE_SHA256}, got ${actual_sha}" >&2
+  exit 1
+fi
+
+rm -rf "${unpack_dir:?}"/*
+tar -xzf "${archive}" -C "${unpack_dir}"
+
+binary=$(find "${unpack_dir}" -type f -name opencode -print -quit)
+if [[ -z "${binary}" ]]; then
+  echo "OpenCode archive did not contain an opencode executable" >&2
+  exit 1
+fi
+
+install -m 0755 "${binary}" "${dependency_dir}/opencode"
+printf '%s\n' "${OPENCODE_VERSION}" > "${dependency_dir}/VERSION"
+rm -rf "${unpack_dir}"
+
+runtime_binary="${dependency_dir}/opensandbox-capi"
+packaged_runtime="${script_dir}/opensandbox-capi"
+if [[ ! -x "${packaged_runtime}" ]]; then
+  echo "Packaged OpenSandbox CAPI app facade is missing; run scripts/package.sh before cf push" >&2
+  exit 1
+fi
+install -m 0755 "${packaged_runtime}" "${runtime_binary}"
+echo "Installed OpenCode ${OPENCODE_VERSION} into ${dependency_dir}"
