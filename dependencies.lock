@@ -1,3 +1,16 @@
 OPENCODE_VERSION="v1.18.32"
 OPENCODE_URL="https://github.com/anomalyco/opencode/releases/download/v1.18.32/opencode-linux-x64.tar.gz"
 OPENCODE_SHA256="3046e0404fdc60fb80307e7a47824ba07477364178a4d09baa8548496dd6d43b"
+
+MECATL_VERSION="v0.0.43"
+MECATL_URL="https://github.com/stacklok/mecatl/releases/download/v0.0.43/mecatl_0.0.43_linux_amd64.tar.gz"
+MECATL_SHA256="021da9f8ee6cd2ec0ed0e34bdf5ebf7f272a7afba1c7ae99deff873e570f67af"
+
+NODE_VERSION="v24.15.0"
+NODE_URL="https://nodejs.org/dist/v24.15.0/node-v24.15.0-linux-x64.tar.gz"
+NODE_SHA256="44836872d9aec49f1e6b52a9a922872db9a2b02d235a616a5681b6a85fec8d89"
+
+STUDIO_IMAGE="ghcr.io/stacklok/mecatl/studio"
+STUDIO_VERSION="v0.0.43"
+STUDIO_DIGEST="sha256:8a7f0bb385cf15c7ab96c6fd9a8b24eacf08346ed5c650b8c11918d85d7415fa"
+STUDIO_EARLY_ACCESS="true"

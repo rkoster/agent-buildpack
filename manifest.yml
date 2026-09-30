@@ -8,7 +8,9 @@ include_files:
 - bin/xdg-open
 - bin/opensandbox-capi
 - bin/opencode-database-setup
+- bin/mecatl-runtime
 - dependencies.lock
+- build/studio/**
 - opencode/plugins/opensandbox.js
 - scripts/test-opencode-plugin.mjs
 stacks:

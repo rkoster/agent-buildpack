@@ -19,6 +19,10 @@ if [[ ! -x "${dependency_dir}/opencode-database-setup" ]]; then
   echo "OpenCode database setup helper missing from ${dependency_dir}" >&2
   exit 1
 fi
+if [[ ! -x "${dependency_dir}/mecatl-runtime" ]]; then
+  echo "Mecatl runtime helper missing from ${dependency_dir}" >&2
+  exit 1
+fi
 
 mkdir -p "${build_dir}/bin" "${build_dir}/.profile.d"
 cat > "${build_dir}/bin/xdg-open" <<'BROWSER_SHIM'
@@ -61,6 +65,13 @@ cat > "${build_dir}/bin/start-agent" <<STARTUP
 set -euo pipefail
 export PATH="\${HOME}/bin:\${PATH}"
 export BROWSER="\${HOME}/bin/xdg-open"
+if [[ "\${AGENT_RUNTIME:-opencode}" == "mecatl" ]]; then
+  export AGENT_DEPS_DIR="\${DEPS_DIR}/${index}/opencode-agent"
+  exec "\${AGENT_DEPS_DIR}/mecatl-runtime"
+elif [[ "\${AGENT_RUNTIME:-opencode}" != "opencode" ]]; then
+  echo "AGENT_RUNTIME must be opencode or mecatl" >&2
+  exit 1
+fi
 if [[ -z "\${OPENCODE_SERVER_PASSWORD:-}" ]]; then
   echo "OPENCODE_SERVER_PASSWORD must be set; refusing to start an unauthenticated OpenCode web server" >&2
   exit 1

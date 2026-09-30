@@ -21,6 +21,38 @@ to OpenCode's generated config. The URL is passed through
 generated config. No PostgreSQL binding means no database plugin. This plugin
 logs sessions and tool events; OpenCode's native session store remains local.
 
+## Selectable Mecatl runtime
+
+OpenCode remains the default. Set `AGENT_RUNTIME=mecatl` to run pinned
+`mecated` v0.0.43, pinned early-access Studio v0.0.43 image assets, and a
+Redis-backed gRPC storage driver in one CF app. The wrapper supervises all
+three processes and considers the app ready only after Studio's `/api/health`
+returns HTTP 200. Studio listens on CF's assigned `PORT`; the isolated lab
+manifest must set `STUDIO_ALLOW_UNAUTHENTICATED=1` because OIDC is out of scope.
+
+Mecatl mode requires one Redis service binding (the demo uses
+`opencode-agent-redis`) and the `dgx-spark-model` binding with `model` and
+`provider.options.baseURL`. The loopback driver uses the published Mecatl Redis
+adapter and gRPC wrappers for session snapshots, event logs, and schedules.
+The runtime maps the bound OpenAI-compatible model to Mecatl's `opencode`
+provider, which uses the OpenAI-compatible Chat Completions adapter. If Spark
+provides no key, a non-secret placeholder bearer key is sent;
+verify that the endpoint accepts a missing/placeholder key before relying on
+inference. The project workspace remains local to the ephemeral CF app, and
+the demo Redis service is ephemeral; neither project files nor session state
+are promised across their service/app replacement.
+
+To select Mecatl in an app manifest:
+
+```yaml
+env:
+  AGENT_RUNTIME: mecatl
+  STUDIO_ALLOW_UNAUTHENTICATED: "1"
+services:
+  - dgx-spark-model
+  - opencode-agent-redis
+```
+
 ## Requirements
 
 - Linux x86-64 on the `cflinuxfs4` stack (the binary-only buildpack reports
@@ -86,8 +118,8 @@ provider or remote OpenCode tools.
 - `bin/supply`: downloads the versioned OpenCode Linux x64 archive and verifies
   its SHA-256 before installing it and the packaged Go facade in the dependency
   directory.
-- `bin/finalize`: writes the authenticated OpenCode and co-process startup
-  wrapper plus release metadata.
+- `bin/finalize`: writes the authenticated OpenCode/co-process wrapper and
+  optional Mecatl/Studio supervisor entrypoint plus release metadata.
 - `bin/release`: selects `./bin/start-agent` as the default web process.
 
 ### Injected OpenSandbox tools
@@ -219,8 +251,10 @@ From this repository:
 ./scripts/package.sh
 ```
 
-`scripts/package.sh` builds the static Go facade in a `golang:1.25.14` Docker
-container to avoid depending on host linker/container filesystem compatibility.
+`scripts/package.sh` builds the static Go facade and PostgreSQL helper in a
+`golang:1.25.14` container and the Mecatl Redis helper in `golang:1.27`. It
+extracts Studio assets and production Node modules from the pinned Studio OCI
+digest, so Docker and registry access are required.
 
 The sandbox facade defaults new sandbox apps to a 4096 MiB disk quota. Set
 `CF_SANDBOX_DISK_QUOTA_MB` to lower the per-sandbox disk request.
@@ -230,7 +264,7 @@ Go facade development uses workspace Devbox Go 1.25:
 devbox run -- sh -c 'cd agent-buildpack/runtime && go test -race ./...'
 ```
 
-`package.sh` builds the Go facade as a static Linux executable and creates
+`package.sh` builds the Go helpers as static Linux executables and creates
 `build/agent-buildpack.zip`, suitable for `cf create-buildpack`. Package from
 the Linux Devbox environment. The target lab verification should use an isolated sample app
 name, explicit buildpack, route, password, and resource limits. Delete only

@@ -66,4 +66,50 @@ if [[ ! -x "${script_dir}/opencode-database-setup" ]]; then
   exit 1
 fi
 install -m 0755 "${script_dir}/opencode-database-setup" "${dependency_dir}/opencode-database-setup"
-echo "Installed OpenCode ${OPENCODE_VERSION} into ${dependency_dir}"
+if [[ ! -x "${script_dir}/mecatl-runtime" ]]; then
+  echo "Packaged Mecatl runtime helper is missing; run scripts/package.sh before cf push" >&2
+  exit 1
+fi
+install -m 0755 "${script_dir}/mecatl-runtime" "${dependency_dir}/mecatl-runtime"
+
+fetch_pinned_archive() {
+  local name=$1 url=$2 expected=$3 archive_path=$4
+  if [[ ! -f "${archive_path}" ]] || [[ "$(sha256sum "${archive_path}" | cut -d ' ' -f 1)" != "${expected}" ]]; then
+    rm -f "${archive_path}"
+    echo "Downloading pinned ${name}"
+    curl --fail --location --retry 3 --silent --show-error "${url}" --output "${archive_path}"
+  fi
+  local actual
+  actual=$(sha256sum "${archive_path}" | cut -d ' ' -f 1)
+  if [[ "${actual}" != "${expected}" ]]; then
+    rm -f "${archive_path}"
+    echo "${name} archive checksum mismatch: expected ${expected}, got ${actual}" >&2
+    exit 1
+  fi
+}
+
+mecatl_archive="${download_dir}/mecatl-${MECATL_VERSION}-linux-amd64.tar.gz"
+node_archive="${download_dir}/node-${NODE_VERSION}-linux-x64.tar.gz"
+fetch_pinned_archive "Mecatl ${MECATL_VERSION}" "${MECATL_URL}" "${MECATL_SHA256}" "${mecatl_archive}"
+fetch_pinned_archive "Node.js ${NODE_VERSION}" "${NODE_URL}" "${NODE_SHA256}" "${node_archive}"
+
+mecatl_unpack="${download_dir}/mecatl-unpacked"
+node_unpack="${download_dir}/node-unpacked"
+rm -rf "${mecatl_unpack}" "${node_unpack}"
+mkdir -p "${mecatl_unpack}" "${node_unpack}"
+tar -xzf "${mecatl_archive}" -C "${mecatl_unpack}" mecated
+tar -xzf "${node_archive}" -C "${node_unpack}" --strip-components=2 "node-${NODE_VERSION}-linux-x64/bin/node"
+install -m 0755 "${mecatl_unpack}/mecated" "${dependency_dir}/mecated"
+install -m 0755 "${node_unpack}/node" "${dependency_dir}/node"
+studio_dir="${deps_dir}/${index}/mecatl-studio"
+mkdir -p "${studio_dir}"
+if [[ ! -d "${script_dir}/../build/studio/app/dist" || ! -d "${script_dir}/../build/studio/app/web/dist" ]]; then
+  echo "Packaged Mecatl Studio image assets are missing; run scripts/package.sh before cf push" >&2
+  exit 1
+fi
+cp -a "${script_dir}/../build/studio/app" "${studio_dir}/app"
+mkdir -p "${studio_dir}/usr/bin"
+install -m 0755 "${dependency_dir}/node" "${studio_dir}/usr/bin/node"
+printf '%s\n' "${MECATL_VERSION}" > "${dependency_dir}/MECATL_VERSION"
+printf '%s\n' "${NODE_VERSION}" > "${dependency_dir}/NODE_VERSION"
+echo "Installed OpenCode ${OPENCODE_VERSION}, Mecatl ${MECATL_VERSION}, and Node.js ${NODE_VERSION}"

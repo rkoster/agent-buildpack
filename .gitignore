@@ -1,5 +1,6 @@
 /build/
 /bin/opensandbox-capi
 /bin/opencode-database-setup
+/bin/mecatl-runtime
 __pycache__/
 *.pyc
