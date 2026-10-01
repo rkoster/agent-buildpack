@@ -307,6 +307,10 @@ func runApplication() error {
 	if dependencyDir == "" {
 		return errors.New("AGENT_DEPS_DIR must identify the staged agent dependency directory")
 	}
+	apiToken := strings.TrimSpace(os.Getenv("MECATL_API_TOKEN"))
+	if apiToken == "" {
+		return errors.New("MECATL_API_TOKEN must be set to enable the protected gRPC route")
+	}
 	studioDir := filepath.Join(filepath.Dir(dependencyDir), "mecatl-studio")
 	baseEnv := selectedEnvironment(os.Environ(), "HOME", "PATH", "TMPDIR", "LANG", "LC_ALL", "USER", "LOGNAME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME")
 
@@ -336,14 +340,11 @@ func runApplication() error {
 	if apiKey == "" {
 		apiKey = "cf-dgx-spark-no-key"
 	}
-	mecatedEnv := append(append([]string{}, baseEnv...), "OPENCODE_API_KEY="+apiKey)
-	mecatedArgs := []string{
-		"serve", "--grpc-addr=127.0.0.1:19101", "--http-addr=", "--metrics-addr=",
-		"--workspace=" + os.Getenv("HOME"), "--default-provider=opencode", "--model=" + modelID,
-		"--opencode-base-url=" + model.Provider.Options.BaseURL, "--session-store-url=127.0.0.1:19100",
-		"--event-log-url=127.0.0.1:19100", "--schedule-store-url=127.0.0.1:19100", "--product-metrics=false",
-		"--no-user-model", "--websearch=off", "--toolhive=false", "--enable-parallel=false", "--enable-teams=false", "--flight-recorder=false",
-	}
+	mecatedEnv := append(append([]string{}, baseEnv...),
+		"OPENCODE_API_KEY="+apiKey,
+		"MECATL_AUTH_TOKEN="+apiToken,
+	)
+	mecatedArgs := mecatedArguments(os.Getenv("HOME"), modelID, model.Provider.Options.BaseURL)
 	mecated := exec.Command(filepath.Join(dependencyDir, "mecated"), mecatedArgs...)
 	mecated.Env = mecatedEnv
 	if err := start("mecated", mecated); err != nil {
@@ -355,7 +356,7 @@ func runApplication() error {
 		return err
 	}
 	studioEnv := append(append([]string{}, baseEnv...),
-		"MECATL_BASE_URL=http://127.0.0.1:19101", "MECATL_AUTH_TOKEN=cf-internal-no-auth", "STUDIO_IMAGE=1", "STUDIO_ALLOW_UNAUTHENTICATED=1",
+		"MECATL_BASE_URL=http://127.0.0.1:19101", "MECATL_AUTH_TOKEN="+apiToken, "STUDIO_IMAGE=1", "STUDIO_ALLOW_UNAUTHENTICATED=1",
 		"STUDIO_PUBLIC_URL="+publicURL,
 		"STUDIO_HOST=0.0.0.0", "STUDIO_PORT="+os.Getenv("PORT"),
 		"STUDIO_WEB_DIST="+filepath.Join(studioDir, "app", "web", "dist"),
@@ -390,6 +391,20 @@ func runApplication() error {
 			return errors.New("a Mecatl runtime process exited unexpectedly")
 		}
 		return fmt.Errorf("a Mecatl runtime process exited: %w", childErr)
+	}
+}
+
+func mecatedArguments(workspace, modelID, baseURL string) []string {
+	return []string{
+		// Gorouter receives the route's HTTP/2 mode and forwards prior-knowledge
+		// h2c to this listener. Client TLS terminates at the router.
+		"serve", "--grpc-addr=0.0.0.0:19101", "--http-addr=", "--metrics-addr=",
+		"--workspace=" + workspace, "--default-provider=opencode", "--model=" + modelID,
+		"--opencode-base-url=" + baseURL,
+		"--session-store-url=127.0.0.1:19100", "--event-log-url=127.0.0.1:19100",
+		"--schedule-store-url=127.0.0.1:19100", "--product-metrics=false",
+		"--no-user-model", "--websearch=off", "--toolhive=false", "--enable-parallel=false",
+		"--enable-teams=false", "--flight-recorder=false",
 	}
 }
 

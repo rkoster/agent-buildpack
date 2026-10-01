@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestModelSelector(t *testing.T) {
 	for _, test := range []struct {
@@ -17,6 +20,29 @@ func TestModelSelector(t *testing.T) {
 				t.Fatalf("modelSelector(%q) = %q, want %q", test.model, got, test.want)
 			}
 		})
+	}
+}
+
+func TestMecatlTokenMustBePresentBeforeProcessesStart(t *testing.T) {
+	t.Setenv("AGENT_RUNTIME", "mecatl")
+	t.Setenv("MECATL_API_TOKEN", " ")
+	t.Setenv("AGENT_DEPS_DIR", t.TempDir())
+	t.Setenv("PORT", "8080")
+	t.Setenv("AGENT_DEPS_DIR", t.TempDir())
+	t.Setenv("VCAP_APPLICATION", `{"application_uris":["example.invalid"]}`)
+	t.Setenv("VCAP_SERVICES", `{"user-provided":[{"name":"dgx-spark-model","credentials":{"model":"model","provider":{"options":{"baseURL":"http://127.0.0.1:1/v1"}}}}]}`)
+	if err := runApplication(); err == nil || err.Error() != "MECATL_API_TOKEN must be set to enable the protected gRPC route" {
+		t.Fatalf("runApplication() error = %v", err)
+	}
+}
+
+func TestMecatlPublicListenerRequiresTokenFlag(t *testing.T) {
+	args := strings.Join(mecatedArguments("/home/vcap", "model", "http://127.0.0.1/v1"), " ")
+	if !strings.Contains(args, "--grpc-addr=0.0.0.0:19101") {
+		t.Fatal("Mecatl gRPC listener must bind the app interface for its CF HTTP/2 route")
+	}
+	if strings.Contains(args, "--auth-token") {
+		t.Fatal("the public listener bearer must not be exposed in the process command line")
 	}
 }
 

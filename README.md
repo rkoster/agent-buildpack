@@ -51,7 +51,34 @@ env:
 services:
   - dgx-spark-model
   - opencode-agent-redis
+routes:
+  - route: studio.example.com
+  - route: mecated.example.com
+    protocol: http2
+    app-port: 19101
 ```
+
+For a public `mecatui` gRPC connection, set `MECATL_API_TOKEN` to a long random
+secret. The demo setup script creates one under `~/.config/cf-opensandbox/`
+with mode `0600` and applies it to the CF app. Mecatl listens on port `19101`
+with bearer authentication; Studio connects over loopback using that token.
+The second route is HTTP/2 to the app (h2c from Gorouter to Mecatl); clients
+still use verified TLS to Gorouter. For first setup, push with `--no-start`, run
+the helper to configure Spark egress, create the token and map the route, then
+start the app. Rerun the helper after later pushes. Connect using the gRPC route
+hostname, not the Studio route:
+
+```sh
+export MECATL_AUTH_TOKEN="$(python3 -c 'from pathlib import Path; print(Path.home().joinpath(".config/cf-opensandbox/opencode-agent-demo-mecatl-token").read_text().strip())')"
+mecatui connect opencode-agent-demo-grpc.10.246.0.21.sslip.io:443 \
+  --auth-token "$MECATL_AUTH_TOKEN"
+```
+
+`mecatui` verifies the router certificate with the system CA bundle by default;
+if this foundation uses a private CA, pass `--tls-ca <CF_ROUTER_CA_PEM>`. The
+HTTP/2 app-protocol route requires foundation Gorouter support and a domain that
+accepts HTTP routes; the route forwards h2c to Mecatl while the public client
+connection remains TLS-protected.
 
 ## Requirements
 
